@@ -20,7 +20,6 @@ int is_ext2(const char* filename) {
     // Check the magic number to verify it's an ext2 file system
     if (sb.s_magic != EXT2_SUPER_MAGIC) {
         fclose(fp);
-        printf("Invalid file system magic number\n");
         return FALSE;
     }
 
@@ -41,12 +40,6 @@ void metadata_ext2(const char* filename) {
     struct ext2_superblock sb;
     fseek(fp, EXT2_BLOCK_SIZE, SEEK_SET);
     fread(&sb, sizeof(sb), 1, fp);
-
-    // Check the magic number to verify it's an ext2 file system
-    if (sb.s_magic != EXT2_SUPER_MAGIC) {
-        printf("Invalid file system magic number\n");
-        return;
-    }
 
     printf("\n------ Filesystem Information ------\n\n");
     printf("Filesystem: EXT2\n\n");

@@ -4,6 +4,6 @@
 /**
  * Phase 1 of the project. META-DATA RETRIEVAL.
  */
-void phase1(char *fileName);
+void phase1(const char *fileName);
 
 #endif

@@ -7,7 +7,10 @@
 #define FAT16_PT_SIZE 0x1BE
 
 #define ATTR_DIRECTORY 0x10
+#define ATTR_ARCHIVE 0x20
 
+#define DIR_FAT16 0
+#define FILE_FAT16 1
 
 typedef struct {
   uint8_t jmp[3];

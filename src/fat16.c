@@ -57,11 +57,132 @@ void metadata_fat16(const char *filename) {
   fclose(fp);
 }
 
-/*
-uint32_t FirstDataSector;
-FirstDataSector = bs.reserved_sectors +
-                (bs.number_of_fats * bs.sectors_per_fat) +
-                root_directory_sectors;*/
+void print_filename(uint8_t entry_filename[], int last, int depth,
+                    int wasLast) {
+  char filename[15];
+  int size_filename = 0;
+  for (int k = 0; k < 8 && entry_filename[k] != 0x20; k++) {
+    filename[size_filename] = tolower(entry_filename[k]);
+    size_filename++;
+  }
+
+  for (int k = 8; k < 11 && entry_filename[k] != 0x20; k++) {
+    if (k == 8) {
+      filename[size_filename] = '.';
+      size_filename++;
+    }
+
+    filename[size_filename] = tolower(entry_filename[k]);
+    size_filename++;
+  }
+
+  filename[size_filename] = '\0';
+
+  for (int i = 0; i < depth; i++) {
+    if (i == 0 && depth != 1) {
+      printf("│   ");
+    } else if (wasLast) {
+      printf("    ");
+    } else {
+      printf("│   ");
+    }
+  }
+  if (last) {
+    printf("└── %s\n", filename);
+  } else {
+    printf("├── %s\n", filename);
+  }
+}
+
+void tree_fat16_subdir(FILE *fp, fat16_boot_sector bs, uint32_t current_sector,
+                       int depth, int wasLast) {
+  uint32_t root_directory_sectors =
+      ((bs.root_dir_entries * 32) + (bs.bytes_per_sector - 1)) /
+      bs.bytes_per_sector;
+
+  for (uint16_t j = 0; j < (bs.bytes_per_sector / sizeof(fat16_dir_entry));
+       j++) {
+    fat16_dir_entry entry;
+    fseek(fp,
+          current_sector * bs.bytes_per_sector + j * sizeof(fat16_dir_entry),
+          SEEK_SET);
+    fread(&entry, sizeof(fat16_dir_entry), 1, fp);
+
+    // skip "." and ".."
+    if (entry.filename[0] == 0x2E) {
+      continue;
+    }
+
+    // skip illegal characters
+    if (entry.filename[0] == 0xE5 || entry.filename[0] == 0x00) {
+      continue;
+    }
+
+    if (entry.attributes == ATTR_DIRECTORY) {
+      // see if it is the last entry in the directory
+      int last = FALSE;
+      {
+        uint16_t k;
+        for (k = j + 1; k < (bs.bytes_per_sector / sizeof(fat16_dir_entry));
+             k++) {
+          fat16_dir_entry next_entry;
+          fseek(fp,
+                current_sector * bs.bytes_per_sector +
+                    k * sizeof(fat16_dir_entry),
+                SEEK_SET);
+          fread(&next_entry, sizeof(fat16_dir_entry), 1, fp);
+
+          if (next_entry.filename[0] != 0xE5 &&
+              next_entry.filename[0] != 0x00) {
+            break;
+          }
+        }
+
+        if (k == (bs.bytes_per_sector / sizeof(fat16_dir_entry))) {
+          last = TRUE;
+        }
+      }
+
+      print_filename(entry.filename, last, depth, wasLast);
+
+      uint32_t cluster =
+          ((uint32_t)entry.first_cluster_high << 16) | entry.first_cluster_low;
+      uint32_t data_region_start_sector =
+          bs.reserved_sectors + (bs.number_of_fats * bs.sectors_per_fat) +
+          root_directory_sectors;
+      uint32_t new_sector =
+          (cluster - 2) * bs.sectors_per_cluster + data_region_start_sector;
+
+      tree_fat16_subdir(fp, bs, new_sector, depth + 1, last);
+    } else if (entry.attributes == ATTR_ARCHIVE) {
+      // see if it is the last entry in the directory
+      int last = FALSE;
+      {
+        uint16_t k;
+        for (k = j + 1; k < (bs.bytes_per_sector / sizeof(fat16_dir_entry));
+             k++) {
+          fat16_dir_entry next_entry;
+          fseek(fp,
+                current_sector * bs.bytes_per_sector +
+                    k * sizeof(fat16_dir_entry),
+                SEEK_SET);
+          fread(&next_entry, sizeof(fat16_dir_entry), 1, fp);
+
+          if (next_entry.filename[0] != 0xE5 &&
+              next_entry.filename[0] != 0x00) {
+            break;
+          }
+        }
+
+        if (k == (bs.bytes_per_sector / sizeof(fat16_dir_entry))) {
+          last = TRUE;
+        }
+      }
+
+      print_filename(entry.filename, last, depth, wasLast);
+    }
+  }
+}
 
 void tree_fat16(const char *filename) {
   FILE *fp = fopen(filename, "rb");
@@ -69,6 +190,8 @@ void tree_fat16(const char *filename) {
     printf("Error opening file\n");
     exit(EXIT_FAILURE);
   }
+
+  printf(".\n");
 
   fat16_boot_sector bs;
   fseek(fp, 0, SEEK_SET);
@@ -78,50 +201,9 @@ void tree_fat16(const char *filename) {
       bs.reserved_sectors + (bs.number_of_fats * bs.sectors_per_fat);
   uint32_t root_directory_sectors =
       ((bs.root_dir_entries * 32) + (bs.bytes_per_sector - 1)) /
-      FAT16_SECTOR_SIZE;
-
-  uint32_t current_sector = first_root_sector;
+      bs.bytes_per_sector;
   for (uint32_t i = 0; i < root_directory_sectors; i++) {
-    fseek(fp, current_sector * bs.bytes_per_sector, SEEK_SET);
-    for (uint16_t j = 0; j < (bs.bytes_per_sector / sizeof(fat16_dir_entry));
-         j++) {
-      fat16_dir_entry entry;
-      fread(&entry, sizeof(fat16_dir_entry), 1, fp);
-
-      // long name - not supported
-      if (entry.filename[6] == '~' && entry.filename[7] == '1') {
-        continue;
-      }
-
-      // skip "." and ".."
-      if (entry.filename[0] == 0x2E) {
-        continue;
-      }
-
-      if (entry.attributes == ATTR_DIRECTORY) {
-        char filename[15];
-        int size_filename = 0;
-        for (int k = 0; k < 8 && entry.filename[k] != 0x20; k++) {
-          filename[size_filename] = tolower(entry.filename[k]);
-          size_filename++;
-        }
-
-        for (int k = 8; k < 11 && entry.filename[k] != 0x20; k++) {
-          if (k == 8) {
-            filename[size_filename] = '.';
-            size_filename++;
-          }
-
-          filename[size_filename] = tolower(entry.filename[k]);
-          size_filename++;
-        }
-
-        filename[size_filename] = '\0';
-        printf("%s\n", filename);
-      }
-    }
-    current_sector++;
+    tree_fat16_subdir(fp, bs, first_root_sector + i, 0, FALSE);
   }
-
   fclose(fp);
 }

@@ -243,10 +243,6 @@ void read_dir(FILE *fp, ext2_inode *inode, ext2_group_desc *group, int depth,
       }
     }
   }
-  /* DEBUG
-  else {
-    printf("\t\t(Unknown file type) %u\n", inode->i_mode);
-  }*/
 }
 
 void tree_ext2(const char *filename) {
@@ -263,18 +259,6 @@ void tree_ext2(const char *filename) {
 
   // Block group size in bytes
   block_size = 1024 << sb.s_log_block_size;
-
-  // number of blocks per block group
-  // s_blocks_per_group
-
-  // number of inodes per block group
-  // s_inodes_per_group
-
-  // calculate number of block groups on the disk
-  // uint32_t group_count = 1 + (sb.s_blocks_count - 1) / sb.s_blocks_per_group;
-
-  // size group descriptors
-  // uint32_t descr_list_size = group_count * sizeof(ext2_group_desc);
 
   // Read first group descriptor from Block Group 0
   uint16_t block_group = 0;
@@ -295,19 +279,3 @@ void tree_ext2(const char *filename) {
 
   fclose(fp);
 }
-
-uint32_t offsetBlockGroup(uint32_t block_group) {
-  return BASE_OFFSET + sb.s_blocks_per_group * block_group * block_size;
-}
-
-uint32_t offsetSuperBlock(uint32_t block_group) {
-  return offsetBlockGroup(block_group) + block_size;
-}
-
-/*
-uint32_t offsetGroupDescriptors(uint32_t block_group) {
-  return offsetBlockGroup(block_group) + ;
-}*/
-
-// Group descriptor -> taula de inodes
-// Group descriptors = N blocks = Taula de inodes

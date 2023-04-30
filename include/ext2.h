@@ -21,6 +21,12 @@
 
 #define EXT2_NAME_LEN 255
 
+
+// test
+#define GDT_BLOCK_COUNT 2
+#define MAX_BLOCK_SIZE 1024
+#define MAX_SECTOR_SIZE 512
+
 // Ext2 directory file types.
 enum {
   EXT2_FT_UNKNOWN,
@@ -172,7 +178,7 @@ typedef struct {
 int is_ext2(const char *filename);
 void metadata_ext2(const char *filename);
 void tree_ext2(const char *filename);
-void read_dir(FILE *fp, ext2_inode *inode, ext2_group_desc *group);
-void read_dir_block(FILE *fp, uint32_t block_num, ext2_group_desc *group);
+void read_dir(FILE *fp, ext2_inode *inode, ext2_group_desc *group, int depth, int imLast);
+void read_dir_block(FILE *fp, uint32_t block_num, ext2_group_desc *group, int depth, int imLast);
 
 #endif

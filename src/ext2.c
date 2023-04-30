@@ -72,34 +72,29 @@ void metadata_ext2(const char *filename) {
   fclose(fp);
 }
 
-void read_group_ext2(FILE *fp, uint16_t group_num, ext2_group_desc *group) {
-  fseek(fp, BLOCK_OFFSET(group_num), SEEK_SET);
+void read_group_desc_ext2(FILE *fp, uint16_t block_group,
+                          ext2_group_desc *group) {
+  uint32_t offset = 2 + block_group * sb.s_blocks_per_group;
+  fseek(fp, BLOCK_OFFSET(offset), SEEK_SET);
   fread(group, sizeof(ext2_group_desc), 1, fp);
 }
 
-void read_inode_ext2(FILE *fp, uint32_t inode_num, ext2_group_desc *group,
-                     ext2_inode *inode) {
-  fseek(fp,
-        BLOCK_OFFSET(group->bg_inode_table) +
-            (inode_num - 1) * sizeof(ext2_inode),
-        SEEK_SET);
-  fread(inode, sizeof(ext2_inode), 1, fp);
-
+void read_inode_ext2(FILE *fp, uint32_t inode_num, ext2_inode *inode) {
   uint32_t block_group = (inode_num - 1) / sb.s_inodes_per_group;
   uint32_t local_inode_index = (inode_num - 1) % sb.s_inodes_per_group;
 
-  printf("inode_num: %u\n", inode_num);
-  printf("block_group: %u\n", block_group);
-  printf("local_inode_index: %u\n", local_inode_index);
+  ext2_group_desc group;
+  read_group_desc_ext2(fp, block_group, &group);
 
-  // ext2_group_desc group;
-  // read_group_ext2(fp, block_group, &group);
+  uint32_t offset = group.bg_inode_table + block_group * sb.s_blocks_per_group;
 
-  printf("...(Read Inode %u mode %u size %u)...\n", inode_num, inode->i_mode,
-         inode->i_size);
+  fseek(fp, BLOCK_OFFSET(offset) + (local_inode_index)*sb.s_inode_size,
+        SEEK_SET);
+  fread(inode, sizeof(ext2_inode), 1, fp);
 }
 
-void read_dir_block(FILE *fp, uint32_t block_num, ext2_group_desc *group) {
+void read_dir_block(FILE *fp, uint32_t block_num, ext2_group_desc *group,
+                    int depth, int imLast) {
   if (block_num == 0) {
     // End of blocks
     return;
@@ -115,7 +110,6 @@ void read_dir_block(FILE *fp, uint32_t block_num, ext2_group_desc *group) {
   while (p < block + block_size) {
     ext2_dir_entry *entry = (ext2_dir_entry *)p;
     if (entry->inode == 0) {
-      printf("End of entries %s\n", entry->name);
       // End of entries
       break;
     }
@@ -125,21 +119,44 @@ void read_dir_block(FILE *fp, uint32_t block_num, ext2_group_desc *group) {
     memcpy(name, entry->name, entry->name_len);
     name[entry->name_len] = '\0';
 
-    // printf("%s\n", name);
-
     // Check if it is a directory
     if ((entry->file_type & EXT2_FT_DIR) == EXT2_FT_DIR) {
       if (strcmp(name, ".") != 0 && strcmp(name, "..") != 0) {
-        printf("\n\t%s - reading directory... with inode\n", name);
+        for (int i = 0; i < depth; i++) {
+          if (i == 0) {
+            printf("│");
+          }
+          printf("\t");
+        }
+        if ((p + entry->rec_len) >= block + block_size) {
+          printf("└── %s\n", name);
+          imLast = TRUE;
+        } else {
+          printf("├── %s\n", name);
+        }
 
         // Recursively traverse the directory
         ext2_inode inode;
-        read_inode_ext2(fp, entry->inode, group, &inode);
+        read_inode_ext2(fp, entry->inode, &inode);
 
-        read_dir(fp, &inode, group);
+        read_dir(fp, &inode, group, depth + 1, imLast);
       }
     } else if ((entry->file_type & EXT2_FT_REG_FILE) == EXT2_FT_REG_FILE) {
-      printf("PRINTING DATA\n");
+      // Print the name of the file
+      for (int i = 0; i < depth; i++) {
+        if (i == 0 && depth != 1) {
+          printf("│\t");
+        } else if (imLast) {
+          printf("\t");
+        } else {
+          printf("│\t");
+        }
+      }
+      if ((p + entry->rec_len) >= block + block_size) {
+        printf("└── %s\n", name);
+      } else {
+        printf("├── %s\n", name);
+      }
     }
 
     // Move to the next directory entry
@@ -147,26 +164,17 @@ void read_dir_block(FILE *fp, uint32_t block_num, ext2_group_desc *group) {
   }
 }
 
-void read_dir(FILE *fp, ext2_inode *inode, ext2_group_desc *group) {
-  printf("\n\tStart readir...\n");
+void read_dir(FILE *fp, ext2_inode *inode, ext2_group_desc *group, int depth,
+              int imLast) {
   if (S_ISDIR(inode->i_mode)) {
-    printf("Start block iterating...\n");
-    printf("Block count %d\n", inode->i_blocks);
     for (int i = 0; i < EXT2_N_BLOCKS; i++) {
-      printf("Iterating %d ...\n", i);
       if (inode->i_block[i] == 0) {
-        continue;
+        break;
       }
 
-      printf("Block %d %u:\n", i, inode->i_block[i]);
-
       if (i < EXT2_NDIR_BLOCKS) {
-        printf("Direct block\n");
-
-        read_dir_block(fp, inode->i_block[i], group);
+        read_dir_block(fp, inode->i_block[i], group, depth, imLast);
       } else if (i == EXT2_IND_BLOCK) {
-        printf("Single indirect block\n");
-
         // Read directory entries from single indirect block
         uint32_t *ind_block = (uint32_t *)malloc(block_size);
         fseek(fp, BLOCK_OFFSET(inode->i_block[i]), SEEK_SET);
@@ -174,13 +182,11 @@ void read_dir(FILE *fp, ext2_inode *inode, ext2_group_desc *group) {
 
         for (int j = 0; j < (int)(block_size / sizeof(uint32_t)); j++) {
           if (ind_block[j] != 0) {
-            read_dir_block(fp, ind_block[j], group);
+            read_dir_block(fp, ind_block[j], group, depth, imLast);
           }
         }
         free(ind_block);
       } else if (i == EXT2_DIND_BLOCK) {
-        printf("Double indirect block\n");
-
         // Read directory entries from double indirect block
         uint32_t *ind_block = (uint32_t *)malloc(block_size);
         fseek(fp, BLOCK_OFFSET(inode->i_block[i]), SEEK_SET);
@@ -194,7 +200,7 @@ void read_dir(FILE *fp, ext2_inode *inode, ext2_group_desc *group) {
 
             for (int k = 0; k < (int)(block_size / sizeof(uint32_t)); k++) {
               if (dbl_ind_block[k] != 0) {
-                read_dir_block(fp, dbl_ind_block[k], group);
+                read_dir_block(fp, dbl_ind_block[k], group, depth, imLast);
               }
             }
 
@@ -203,8 +209,6 @@ void read_dir(FILE *fp, ext2_inode *inode, ext2_group_desc *group) {
         }
         free(ind_block);
       } else if (i == EXT2_TIND_BLOCK) {
-        printf("Triple indirect block\n");
-
         // Read directory entries from triple indirect block
         uint32_t *ind_block = (uint32_t *)malloc(block_size);
         fseek(fp, BLOCK_OFFSET(inode->i_block[i]), SEEK_SET);
@@ -224,7 +228,7 @@ void read_dir(FILE *fp, ext2_inode *inode, ext2_group_desc *group) {
 
                 for (int l = 0; l < (int)(block_size / sizeof(uint32_t)); l++) {
                   if (trp_ind_block[l] != 0) {
-                    read_dir_block(fp, trp_ind_block[l], group);
+                    read_dir_block(fp, trp_ind_block[l], group, depth, imLast);
                   }
                 }
 
@@ -238,14 +242,11 @@ void read_dir(FILE *fp, ext2_inode *inode, ext2_group_desc *group) {
         free(ind_block);
       }
     }
-  } else if (S_ISREG(inode->i_mode)) {
-    printf("Regular file\n");
-  } else if (S_ISLNK(inode->i_mode)) {
-    printf("Symbolic link\n");
-  } else {
-    printf("Unknown file type\n");
   }
-  printf("\tEnd readir...\n\n");
+  /* DEBUG
+  else {
+    printf("\t\t(Unknown file type) %u\n", inode->i_mode);
+  }*/
 }
 
 void tree_ext2(const char *filename) {
@@ -256,39 +257,57 @@ void tree_ext2(const char *filename) {
     return;
   }
 
-  // Read the superblock - GROUP 1
+  // Read the superblock (first block group)
   fseek(fp, BASE_OFFSET, SEEK_SET);
   fread(&sb, sizeof(sb), 1, fp);
 
+  // Block group size in bytes
   block_size = 1024 << sb.s_log_block_size;
 
+  // number of blocks per block group
+  // s_blocks_per_group
+
+  // number of inodes per block group
+  // s_inodes_per_group
+
   // calculate number of block groups on the disk
-  uint16_t group_count = 1 + (sb.s_blocks_count - 1) / sb.s_blocks_per_group;
+  // uint32_t group_count = 1 + (sb.s_blocks_count - 1) / sb.s_blocks_per_group;
 
-  printf("STATS\n");
-  printf("  Inodes Group: %d\n", sb.s_inodes_per_group);
-  printf("  Blocks Group: %d\n", sb.s_blocks_per_group);
+  // size group descriptors
+  // uint32_t descr_list_size = group_count * sizeof(ext2_group_desc);
 
-  // iterate first group
+  // Read first group descriptor from Block Group 0
+  uint16_t block_group = 0;
+  ext2_group_desc group;
+  read_group_desc_ext2(fp, block_group, &group);
 
-  for (uint16_t group_num = 2; group_num <= group_count; group_num++) {
-    ext2_group_desc group;
-    read_group_ext2(fp, group_num, &group);
+  // inodes per block group
+  uint16_t inodes_per_block = block_size / sb.s_inode_size;
 
-    printf("GROUP %u\n", group_num);
+  for (uint32_t inode_num = 1; inode_num <= inodes_per_block; inode_num++) {
+    ext2_inode inode;
+    read_inode_ext2(fp, inode_num, &inode);
 
-    uint16_t inodes_per_block = block_size / sizeof(ext2_inode);
-
-    for (uint32_t inode_num = 1; inode_num < inodes_per_block; inode_num++) {
-      printf("\n............................................\n");
-      printf("Inode per block... %u\n", inode_num);
-
-      ext2_inode inode;
-      read_inode_ext2(fp, inode_num, &group, &inode);
-
-      read_dir(fp, &inode, &group);
-    }
+    read_dir(fp, &inode, &group, 0, FALSE);
   }
+
+  printf("\n");
 
   fclose(fp);
 }
+
+uint32_t offsetBlockGroup(uint32_t block_group) {
+  return BASE_OFFSET + sb.s_blocks_per_group * block_group * block_size;
+}
+
+uint32_t offsetSuperBlock(uint32_t block_group) {
+  return offsetBlockGroup(block_group) + block_size;
+}
+
+/*
+uint32_t offsetGroupDescriptors(uint32_t block_group) {
+  return offsetBlockGroup(block_group) + ;
+}*/
+
+// Group descriptor -> taula de inodes
+// Group descriptors = N blocks = Taula de inodes

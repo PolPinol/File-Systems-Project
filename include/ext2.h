@@ -2,36 +2,46 @@
 #define EXT2_H
 
 #include <stdint.h>
+#include <stdio.h>
 
 // Constants for the ext2 file system
 #define EXT2_SUPER_MAGIC 0xEF53
-#define EXT2_BLOCK_SIZE 1024
-#define EXT2_INODE_SIZE 128
+#define EXT2_SB_SIZE 1024 // Locates beginning of the super block (first group)
+#define BASE_OFFSET 1024
 
-// Directory entry structure
+// Blocks are numbered starting from 1.
+#define BLOCK_OFFSET(block) (BASE_OFFSET + (block - 1) * block_size)
+
+// Constants relative to the data blocks
+#define EXT2_NDIR_BLOCKS 12
+#define EXT2_IND_BLOCK EXT2_NDIR_BLOCKS
+#define EXT2_DIND_BLOCK (EXT2_IND_BLOCK + 1)
+#define EXT2_TIND_BLOCK (EXT2_DIND_BLOCK + 1)
+#define EXT2_N_BLOCKS (EXT2_TIND_BLOCK + 1)
+
 #define EXT2_NAME_LEN 255
 
-// File types
-#define EXT2_FT_UNKNOWN 0
-#define EXT2_FT_REG_FILE 1
-#define EXT2_FT_DIR 2
-#define EXT2_FT_CHRDEV 3
-#define EXT2_FT_BLKDEV 4
-#define EXT2_FT_FIFO 5
-#define EXT2_FT_SOCK 6
-#define EXT2_FT_SYMLINK 7
 
-// File system states
-#define EXT2_VALID_FS 1
-#define EXT2_ERROR_FS 2
+// test
+#define GDT_BLOCK_COUNT 2
+#define MAX_BLOCK_SIZE 1024
+#define MAX_SECTOR_SIZE 512
 
-// Error behavior
-#define EXT2_ERRORS_CONTINUE 1
-#define EXT2_ERRORS_RO 2
-#define EXT2_ERRORS_PANIC 3
+// Ext2 directory file types.
+enum {
+  EXT2_FT_UNKNOWN,
+  EXT2_FT_REG_FILE,
+  EXT2_FT_DIR,
+  EXT2_FT_CHRDEV,
+  EXT2_FT_BLKDEV,
+  EXT2_FT_FIFO,
+  EXT2_FT_SOCK,
+  EXT2_FT_SYMLINK,
+  EXT2_FT_MAX
+};
 
 // Superblock structure
-struct ext2_superblock {
+typedef struct {
   uint32_t s_inodes_count;      // Total number of inodes
   uint32_t s_blocks_count;      // Total number of blocks
   uint32_t s_r_blocks_count;    // Number of reserved blocks
@@ -88,10 +98,10 @@ struct ext2_superblock {
   uint32_t s_default_mount_opts; // Default mount options
   uint32_t s_first_meta_bg;      // First metablock block group
   uint32_t s_reserved[190];      // Padding to the end of the block
-};
+} __attribute__((packed)) ext2_superblock;
 
 // Group descriptor structure
-struct ext2_group_desc {
+typedef struct {
   uint32_t bg_block_bitmap;      // Block bitmap block
   uint32_t bg_inode_bitmap;      // Inode bitmap block
   uint32_t bg_inode_table;       // Inode table block
@@ -100,10 +110,10 @@ struct ext2_group_desc {
   uint16_t bg_used_dirs_count;   // Number of directories in group
   uint16_t bg_pad;
   uint32_t bg_reserved[3]; // Padding to the end of the structure
-};
+} __attribute__((packed)) ext2_group_desc;
 
 // Inode structure
-struct ext2_inode {
+typedef struct {
   uint16_t i_mode;        // File mode
   uint16_t i_uid;         // Low 16 bits of owner uid
   uint32_t i_size;        // Size in bytes
@@ -115,24 +125,60 @@ struct ext2_inode {
   uint16_t i_links_count; // Number of hard links
   uint32_t i_blocks;      // Blocks count IN DISK SECTORS
   uint32_t i_flags;       // File flags
-  uint32_t osd1;          // OS dependent 1
-  uint32_t i_block[15];   // Pointers to blocks
-  uint32_t i_generation;  // File version (for NFS)
-  uint32_t i_file_acl;    // File ACL
-  uint32_t i_dir_acl;     // Directory ACL
-  uint32_t i_faddr;       // Fragment address
-  uint32_t extra[3];
-};
+  union {
+    struct {
+      uint32_t l_i_reserved1;
+    } linux1;
+    struct {
+      uint32_t h_i_translator;
+    } hurd1;
+    struct {
+      uint32_t m_i_reserved1;
+    } masix1;
+  } osd1;
+  uint32_t i_block[15];  // Pointers to blocks
+  uint32_t i_generation; /* File version (for NFS) */
+  uint32_t i_file_acl;   /* File ACL */
+  uint32_t i_dir_acl;    /* Directory ACL */
+  uint32_t i_faddr;      /* Fragment address */
+  union {
+    struct {
+      uint8_t l_i_frag;  /* Fragment number */
+      uint8_t l_i_fsize; /* Fragment size */
+      uint16_t i_pad1;
+      uint16_t l_i_uid_high; /* these 2 fields    */
+      uint16_t l_i_gid_high; /* were reserved2[0] */
+      uint32_t l_i_reserved2;
+    } linux2;
+    struct {
+      uint8_t h_i_frag;  /* Fragment number */
+      uint8_t h_i_fsize; /* Fragment size */
+      uint16_t h_i_mode_high;
+      uint16_t h_i_uid_high;
+      uint16_t h_i_gid_high;
+      uint32_t h_i_author;
+    } hurd2;
+    struct {
+      uint8_t m_i_frag;  /* Fragment number */
+      uint8_t m_i_fsize; /* Fragment size */
+      uint16_t m_pad1;
+      uint32_t m_i_reserved2[2];
+    } masix2;
+  } osd2;
+} __attribute__((packed)) ext2_inode;
 
-struct ext2_dir_entry {
+typedef struct {
   uint32_t inode;           // Inode number
   uint16_t rec_len;         // Directory entry length
   uint8_t name_len;         // Name length
   uint8_t file_type;        // File type
   char name[EXT2_NAME_LEN]; // File name
-};
+} __attribute__((packed)) ext2_dir_entry;
 
 int is_ext2(const char *filename);
 void metadata_ext2(const char *filename);
+void tree_ext2(const char *filename);
+void read_dir(FILE *fp, ext2_inode *inode, ext2_group_desc *group, int depth, int imLast);
+void read_dir_block(FILE *fp, uint32_t block_num, ext2_group_desc *group, int depth, int imLast);
 
 #endif

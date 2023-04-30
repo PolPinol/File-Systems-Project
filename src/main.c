@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "../include/phase1.h"
+#include "../include/phase2.h"
 
 int main(int argc, char *argv[]) {
     // PHASE 1
@@ -20,7 +21,7 @@ int main(int argc, char *argv[]) {
         if (strcmp(argv[1], "--info") == 0) {
             phase1(argv[2]);
         } else if (strcmp(argv[1], "--tree") == 0) {
-            //phase2();
+            phase2(argv[2]);
         } else {
             printf("Error arguments");
         }

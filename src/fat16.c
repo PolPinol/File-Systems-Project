@@ -94,8 +94,12 @@ void print_filename(uint8_t entry_filename[], int last, int depth,
   }
 }
 
+fat16_dir_entry file_found;
+int file_found_flag = FALSE;
+
 void tree_fat16_subdir(FILE *fp, fat16_boot_sector bs, uint32_t current_sector,
-                       int depth, int wasLast) {
+                       int depth, int wasLast, int find_file,
+                       const char *file_name) {
   uint32_t root_directory_sectors =
       ((bs.root_dir_entries * 32) + (bs.bytes_per_sector - 1)) /
       bs.bytes_per_sector;
@@ -143,7 +147,9 @@ void tree_fat16_subdir(FILE *fp, fat16_boot_sector bs, uint32_t current_sector,
         }
       }
 
-      print_filename(entry.filename, last, depth, wasLast);
+      if (!find_file) {
+        print_filename(entry.filename, last, depth, wasLast);
+      }
 
       uint32_t cluster =
           ((uint32_t)entry.first_cluster_high << 16) | entry.first_cluster_low;
@@ -153,7 +159,8 @@ void tree_fat16_subdir(FILE *fp, fat16_boot_sector bs, uint32_t current_sector,
       uint32_t new_sector =
           (cluster - 2) * bs.sectors_per_cluster + data_region_start_sector;
 
-      tree_fat16_subdir(fp, bs, new_sector, depth + 1, last);
+      tree_fat16_subdir(fp, bs, new_sector, depth + 1, last, find_file,
+                        file_name);
     } else if (entry.attributes == ATTR_ARCHIVE) {
       // see if it is the last entry in the directory
       int last = FALSE;
@@ -179,19 +186,47 @@ void tree_fat16_subdir(FILE *fp, fat16_boot_sector bs, uint32_t current_sector,
         }
       }
 
-      print_filename(entry.filename, last, depth, wasLast);
+      if (find_file) {
+        char filename[15];
+        int size_filename = 0;
+        for (int k = 0; k < 8 && entry.filename[k] != 0x20; k++) {
+          filename[size_filename] = tolower(entry.filename[k]);
+          size_filename++;
+        }
+
+        for (int k = 8; k < 11 && entry.filename[k] != 0x20; k++) {
+          if (k == 8) {
+            filename[size_filename] = '.';
+            size_filename++;
+          }
+
+          filename[size_filename] = tolower(entry.filename[k]);
+          size_filename++;
+        }
+
+        filename[size_filename] = '\0';
+
+        if (strcmp(filename, file_name) == 0) {
+          file_found = entry;
+          file_found_flag = TRUE;
+        }
+      } else {
+        print_filename(entry.filename, last, depth, wasLast);
+      }
     }
   }
 }
 
-void tree_fat16(const char *filename) {
-  FILE *fp = fopen(filename, "rb");
+void tree_fat16(const char *file_system, int find_file, const char *file_name) {
+  FILE *fp = fopen(file_system, "rb");
   if (!fp) {
     printf("Error opening file\n");
     exit(EXIT_FAILURE);
   }
 
-  printf(".\n");
+  if (!find_file) {
+    printf(".\n");
+  }
 
   fat16_boot_sector bs;
   fseek(fp, 0, SEEK_SET);
@@ -203,7 +238,64 @@ void tree_fat16(const char *filename) {
       ((bs.root_dir_entries * 32) + (bs.bytes_per_sector - 1)) /
       bs.bytes_per_sector;
   for (uint32_t i = 0; i < root_directory_sectors; i++) {
-    tree_fat16_subdir(fp, bs, first_root_sector + i, 0, FALSE);
+    tree_fat16_subdir(fp, bs, first_root_sector + i, 0, FALSE, find_file,
+                      file_name);
   }
   fclose(fp);
+}
+
+void cat_fat16(const char *file_system, const char *file) {
+  file_found_flag = FALSE;
+
+  tree_fat16(file_system, TRUE, file);
+
+  if (file_found_flag == FALSE) {
+    printf("File not found\n");
+    exit(EXIT_FAILURE);
+  } else {
+    FILE *fp = fopen(file_system, "rb");
+    if (!fp) {
+      printf("Error opening file\n");
+      exit(EXIT_FAILURE);
+    }
+
+    fat16_boot_sector bs;
+    fseek(fp, 0, SEEK_SET);
+    fread(&bs, sizeof(fat16_boot_sector), 1, fp);
+
+    uint32_t root_directory_sectors =
+        ((bs.root_dir_entries * 32) + (bs.bytes_per_sector - 1)) /
+        bs.bytes_per_sector;
+    uint32_t data_region_start_sector =
+        bs.reserved_sectors + (bs.number_of_fats * bs.sectors_per_fat) +
+        root_directory_sectors;
+    uint32_t first_cluster = ((uint32_t)file_found.first_cluster_high << 16) |
+                             file_found.first_cluster_low;
+    uint32_t current_sector =
+        (first_cluster - 2) * bs.sectors_per_cluster + data_region_start_sector;
+
+    // read file from current_sector
+    uint32_t file_size = file_found.file_size;
+    uint32_t bytes_read = 0;
+
+    while (bytes_read < file_size) {
+      uint32_t bytes_to_read = bs.bytes_per_sector;
+      if (bytes_read + bytes_to_read > file_size) {
+        bytes_to_read = file_size - bytes_read;
+      }
+
+      char buffer[bytes_to_read];
+      fseek(fp, current_sector * bs.bytes_per_sector, SEEK_SET);
+      fread(buffer, bytes_to_read, 1, fp);
+
+      for (uint32_t i = 0; i < bytes_to_read; i++) {
+        printf("%c", buffer[i]);
+      }
+
+      bytes_read += bytes_to_read;
+      current_sector++;
+    }
+
+    fclose(fp);
+  }
 }

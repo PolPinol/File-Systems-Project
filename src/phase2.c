@@ -3,12 +3,13 @@
 #include "../include/ext2.h"
 #include "../include/fat16.h"
 #include "../include/phase2.h"
+#include "../include/util.h"
 
 void phase2(const char *fileName) {
   if (is_ext2(fileName)) {
     tree_ext2(fileName);
   } else if (is_fat16(fileName)) {
-    tree_fat16(fileName);
+    tree_fat16(fileName, FALSE, "");
   } else {
     printf("Unknown\n");
   }

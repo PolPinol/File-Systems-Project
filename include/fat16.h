@@ -3,14 +3,8 @@
 
 #include <stdint.h>
 
-#define FAT16_SECTOR_SIZE 512
-#define FAT16_PT_SIZE 0x1BE
-
 #define ATTR_DIRECTORY 0x10
 #define ATTR_ARCHIVE 0x20
-
-#define DIR_FAT16 0
-#define FILE_FAT16 1
 
 typedef struct {
   uint8_t jmp[3];
@@ -40,19 +34,20 @@ typedef struct {
   uint8_t attributes;
   uint8_t reserved;
   uint8_t creation_time_tenths;
-  uint16_t creation_time;    // Time file was created.
-  uint16_t creation_date;    // Date file was created.
-  uint16_t last_access_date; // Last access date.
+  uint16_t creation_time;
+  uint16_t creation_date;
+  uint16_t last_access_date;
   uint16_t
-      first_cluster_high;     // High word of this entry's first cluster number.
-  uint16_t last_write_time;   // Time of last write.
-  uint16_t last_write_date;   // Date of last write.
-  uint16_t first_cluster_low; // Low word of this entry's first cluster number.
-  uint32_t file_size; // 32-bit unsigned holding this file's size in bytes.
+      first_cluster_high;
+  uint16_t last_write_time;
+  uint16_t last_write_date;
+  uint16_t first_cluster_low;
+  uint32_t file_size;
 } __attribute((packed)) fat16_dir_entry;
 
 int is_fat16(const char *filename);
 void metadata_fat16(const char *filename);
-void tree_fat16(const char *filename);
+void tree_fat16(const char *file_system, int find_file, const char *file_name);
+void cat_fat16(const char *file_system, const char *file);
 
 #endif

@@ -21,7 +21,6 @@
 
 #define EXT2_NAME_LEN 255
 
-
 // test
 #define GDT_BLOCK_COUNT 2
 #define MAX_BLOCK_SIZE 1024

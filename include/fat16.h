@@ -6,26 +6,11 @@
 #define FAT16_SECTOR_SIZE 512
 #define FAT16_PT_SIZE 0x1BE
 
-typedef struct {
-  uint8_t boot_indicator;
-  uint8_t start_head;
-  uint8_t start_sector;
-  uint8_t start_cylinder;
-  uint8_t partition_type;
-  uint8_t end_head;
-  uint8_t end_sector;
-  uint8_t end_cylinder;
-  uint32_t start_sector_lba;
-  uint32_t total_sectors;
-} __attribute((packed)) fat16_partition_entry;
+#define ATTR_DIRECTORY 0x10
+#define ATTR_ARCHIVE 0x20
 
-typedef struct {
-  uint8_t bootstrap_code[446];
-  uint32_t disk_signature;
-  uint16_t usually_zero;
-  fat16_partition_entry partition_table[4];
-  uint16_t boot_signature;
-} __attribute__((packed)) fat16_partition_table;
+#define DIR_FAT16 0
+#define FILE_FAT16 1
 
 typedef struct {
   uint8_t jmp[3];
@@ -48,8 +33,6 @@ typedef struct {
   uint32_t volume_id;
   char volume_label[11];
   char fs_type[8];
-  uint8_t boot_code[448];
-  uint16_t boot_sector_signature;
 } __attribute((packed)) fat16_boot_sector;
 
 typedef struct {
@@ -70,5 +53,6 @@ typedef struct {
 
 int is_fat16(const char *filename);
 void metadata_fat16(const char *filename);
+void tree_fat16(const char *filename);
 
 #endif

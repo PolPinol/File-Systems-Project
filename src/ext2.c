@@ -125,8 +125,10 @@ void read_dir_block(FILE *fp, uint32_t block_num, ext2_group_desc *group,
         for (int i = 0; i < depth; i++) {
           if (i == 0) {
             printf("│");
+          } else {
+            printf(" ");
           }
-          printf("\t");
+          printf("   ");
         }
         if ((p + entry->rec_len) >= block + block_size) {
           printf("└── %s\n", name);
@@ -145,11 +147,11 @@ void read_dir_block(FILE *fp, uint32_t block_num, ext2_group_desc *group,
       // Print the name of the file
       for (int i = 0; i < depth; i++) {
         if (i == 0 && depth != 1) {
-          printf("│\t");
+          printf("│   ");
         } else if (imLast) {
-          printf("\t");
+          printf("    ");
         } else {
-          printf("│\t");
+          printf("│   ");
         }
       }
       if ((p + entry->rec_len) >= block + block_size) {
@@ -252,6 +254,8 @@ void tree_ext2(const char *filename) {
     perror("Failed to open file system file");
     return;
   }
+
+  printf(".\n");
 
   // Read the superblock (first block group)
   fseek(fp, BASE_OFFSET, SEEK_SET);

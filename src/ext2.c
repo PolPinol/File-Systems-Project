@@ -5,6 +5,11 @@
 #include "../include/ext2.h"
 #include "../include/util.h"
 
+void read_dir(FILE *fp, ext2_inode *inode, ext2_group_desc *group, int depth,
+              int imLast);
+void read_dir_block(FILE *fp, uint32_t block_num, ext2_group_desc *group,
+                    int depth, int imLast);
+
 static uint16_t block_size = 0;
 ext2_superblock sb;
 
@@ -16,7 +21,7 @@ int is_ext2(const char *filename) {
   }
 
   ext2_superblock sb;
-  fseek(fp, EXT2_SB_SIZE, SEEK_SET);
+  fseek(fp, BASE_OFFSET, SEEK_SET);
   fread(&sb, sizeof(sb), 1, fp);
 
   // Check the magic number to verify it's an ext2 file system
@@ -40,7 +45,7 @@ void metadata_ext2(const char *filename) {
 
   // Read the superblock
   ext2_superblock sb;
-  fseek(fp, EXT2_SB_SIZE, SEEK_SET);
+  fseek(fp, BASE_OFFSET, SEEK_SET);
   fread(&sb, sizeof(sb), 1, fp);
 
   printf("\n------ Filesystem Information ------\n\n");

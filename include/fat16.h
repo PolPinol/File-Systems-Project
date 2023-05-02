@@ -45,9 +45,32 @@ typedef struct {
   uint32_t file_size;
 } __attribute((packed)) fat16_dir_entry;
 
+/**
+* Function that checks if the file system is fat16
+* @param filename the name of the file system
+* @return 1 if the file system is fat16, 0 otherwise
+*/
 int is_fat16(const char *filename);
+
+/**
+* Function that prints the metadata of the file system
+* @param filename the name of the file system
+*/
 void metadata_fat16(const char *filename);
+
+/**
+* Function that prints the content of the fat16 file system in a tree format
+* @param filename the name of the file system
+* @param find_file TRUE if the file is found, FALSE otherwise
+* @param file_name the name of the file
+*/
 void tree_fat16(const char *file_system, int find_file, const char *file_name);
+
+/**
+* Function that prints the content of the file
+* @param filename the name of the file system
+* @param file the name of the file
+*/
 void cat_fat16(const char *file_system, const char *file);
 
 #endif

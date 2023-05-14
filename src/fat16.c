@@ -22,23 +22,23 @@ int is_fat16(const char *filename) {
   fseek(fp, 0, SEEK_SET);
   fread(&bs, sizeof(fat16_boot_sector), 1, fp);
 
-  // We need to check the FAT32 structure
-  fat32_boot_sector bs32;
-  fseek(fp, 0, SEEK_SET);
-  fread(&bs32, sizeof(fat32_boot_sector), 1, fp);
 
   if (bs.bytes_per_sector == 0) return FALSE;
 
   int root_dir_sectors = ((bs.root_dir_entries * 32) + (bs.bytes_per_sector - 1)) / bs.bytes_per_sector;
   int sectors_per_fat;
+  uint32_t sectors_per_fat_32;
   int total_sectors;
   int data_sectors;
   int cluster_count;
 
   if (bs.sectors_per_fat != 0)
     sectors_per_fat = bs.sectors_per_fat;
-  else
-    sectors_per_fat = bs32.sectors_per_fat_long;
+  else {
+    fseek(fp, 36, SEEK_SET);
+    fread(&sectors_per_fat_32, sizeof(sectors_per_fat_32), 1, fp);
+    sectors_per_fat = sectors_per_fat_32;
+  }
 
   if(bs.total_sectors_small != 0)
     total_sectors = bs.total_sectors_small;

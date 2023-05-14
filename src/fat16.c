@@ -60,7 +60,7 @@ void metadata_fat16(const char *filename) {
 }
 
 void _print_filename_tree(uint8_t entry_filename[], int last, int depth,
-                          int wasLast) {
+                    int wasLast) {
   char filename[15];
   int size_filename = 0;
   for (int k = 0; k < 8 && entry_filename[k] != 0x20; k++) {
@@ -96,7 +96,7 @@ void _print_filename_tree(uint8_t entry_filename[], int last, int depth,
   }
 }
 
-int _is_last_entry(FILE *fp, uint32_t current_sector, int j) {
+int _is_last_entry(FILE *fp, uint32_t current_sector, int j, fat16_boot_sector bs) {
   int last = FALSE;
   {
     uint16_t k;
@@ -121,7 +121,7 @@ int _is_last_entry(FILE *fp, uint32_t current_sector, int j) {
 }
 
 uint32_t _calculate_new_sector(fat16_dir_entry entry,
-                               uint32_t root_directory_sectors) {
+                               uint32_t root_directory_sectors, fat16_boot_sector bs) {
   uint32_t cluster =
       ((uint32_t)entry.first_cluster_high << 16) | entry.first_cluster_low;
   uint32_t data_region_start_sector = bs.reserved_sectors +
@@ -186,18 +186,18 @@ void tree_fat16_subdir(FILE *fp, fat16_boot_sector bs, uint32_t current_sector,
 
     if (entry.attributes == ATTR_DIRECTORY) {
       // see if it is the last entry in the directory
-      int last = _is_last_entry(fp, current_sector, j);
+      int last = _is_last_entry(fp, current_sector, j, bs);
 
       if (!find_file) {
         _print_filename_tree(entry.filename, last, depth, wasLast);
       }
 
       tree_fat16_subdir(fp, bs,
-                        _calculate_new_sector(entry, root_directory_sectors),
+                        _calculate_new_sector(entry, root_directory_sectors, bs),
                         depth + 1, last, find_file, file_name);
     } else if (entry.attributes == ATTR_ARCHIVE) {
       // see if it is the last entry in the directory
-      int last = _is_last_entry(fp, current_sector, j);
+      int last = _is_last_entry(fp, current_sector, j, bs);
 
       if (find_file) {
         _print_filename_cat(entry, file_name);

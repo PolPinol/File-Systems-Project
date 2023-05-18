@@ -11,6 +11,7 @@ fat16_dir_entry file_found;
 int file_found_flag = FALSE;
 
 int is_fat16(const char *filename) {
+
   FILE *fp = fopen(filename, "rb");
   if (!fp) {
     printf("Error opening file\n");
@@ -21,14 +22,39 @@ int is_fat16(const char *filename) {
   fseek(fp, 0, SEEK_SET);
   fread(&bs, sizeof(fat16_boot_sector), 1, fp);
 
-  if (strncmp(bs.fs_type, "FAT16", 5) != 0) {
-    fclose(fp);
-    return FALSE;
+
+  if (bs.bytes_per_sector == 0) return FALSE;
+
+  int root_dir_sectors = ((bs.root_dir_entries * 32) + (bs.bytes_per_sector - 1)) / bs.bytes_per_sector;
+  int sectors_per_fat;
+  uint32_t sectors_per_fat_32;
+  int total_sectors;
+  int data_sectors;
+  int cluster_count;
+
+  if (bs.sectors_per_fat != 0)
+    sectors_per_fat = bs.sectors_per_fat;
+  else {
+    fseek(fp, 36, SEEK_SET);
+    fread(&sectors_per_fat_32, sizeof(sectors_per_fat_32), 1, fp);
+    sectors_per_fat = sectors_per_fat_32;
   }
 
+  if(bs.total_sectors_small != 0)
+    total_sectors = bs.total_sectors_small;
+  else 
+    total_sectors = bs.total_sectors_long;
+
+  data_sectors = total_sectors - (bs.reserved_sectors + (bs.number_of_fats * sectors_per_fat) + root_dir_sectors);
+  cluster_count = data_sectors / bs.sectors_per_cluster;
+  
   fclose(fp);
 
-  return TRUE;
+  if (cluster_count >= 4085 && cluster_count < 65525) {
+    return TRUE;
+  }
+
+  return FALSE;
 }
 
 void metadata_fat16(const char *filename) {

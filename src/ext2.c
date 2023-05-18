@@ -79,22 +79,30 @@ void metadata_ext2(const char *filename) {
 
 void read_group_desc_ext2(FILE *fp, uint16_t block_group,
                           ext2_group_desc *group) {
-  uint32_t offset = 2 + block_group * sb.s_blocks_per_group;
-  fseek(fp, BLOCK_OFFSET(offset), SEEK_SET);
+  int size_off = block_size == 1024 ? 2 : 1;
+  int offset = block_size * ((block_group * sb.s_blocks_per_group) + size_off);
+  fseek(fp, offset, SEEK_SET);  
   fread(group, sizeof(ext2_group_desc), 1, fp);
 }
 
 void read_inode_ext2(FILE *fp, uint32_t inode_num, ext2_inode *inode) {
   uint32_t block_group = (inode_num - 1) / sb.s_inodes_per_group;
-  uint32_t local_inode_index = (inode_num - 1) % sb.s_inodes_per_group;
 
   ext2_group_desc group;
   read_group_desc_ext2(fp, block_group, &group);
 
-  uint32_t offset = group.bg_inode_table + block_group * sb.s_blocks_per_group;
+    int inode_block_off;
+    long inode_offset;
+    if(block_group == 0 || (block_group % 2) != 0) {
+      inode_block_off = group.bg_inode_table;
+    } else {
+      inode_block_off = 2;
+    }
+    
+    inode_offset = sb.s_inode_size * ((inode_num - 1) % sb.s_inodes_per_group) +
+        (block_size * block_group * sb.s_blocks_per_group) + (block_size * inode_block_off);
 
-  fseek(fp, BLOCK_OFFSET(offset) + (local_inode_index)*sb.s_inode_size,
-        SEEK_SET);
+  fseek(fp, inode_offset, SEEK_SET);
   fread(inode, sizeof(ext2_inode), 1, fp);
 }
 
@@ -107,7 +115,8 @@ void read_dir_block(FILE *fp, uint32_t block_num, ext2_group_desc *group,
 
   // Read the block data
   uint8_t block[block_size];
-  fseek(fp, BLOCK_OFFSET(block_num), SEEK_SET);
+
+  fseek(fp, block_num * block_size, SEEK_SET);
   fread(block, block_size, 1, fp);
 
   // Iterate over the directory entries within the block

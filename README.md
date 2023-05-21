@@ -3,12 +3,12 @@
 ## Build
 The following command will build the executable `./fsutils`.
 ```bash
-`$ make`
+$ make
 ```
 
 The following command will clean the binaries generated.
 ```bash
-`$ make clean`
+$ make clean
 ```
 
 ## Commands
@@ -26,7 +26,7 @@ $./fsutils --tree <file system>`
 ### Phase 3
 The flag `--cat` is able to print the data of the specified file if it has been located inside the provided FAT16 file system.
 ```bash
-$./fsutils --cat <FAT16 file system> <file>`
+$./fsutils --cat <FAT16 file system> <file>
 ```
 
 ## Resources

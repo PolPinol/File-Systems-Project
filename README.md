@@ -20,7 +20,7 @@ $ ./fsutils --info <file system>
 ### Phase 2
 The flag `--tree` will show a listing of the files and directories in the file system.
 ```bash
-$./fsutils --tree <file system>`
+$./fsutils --tree <file system>
 ```
 
 ### Phase 3

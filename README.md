@@ -28,7 +28,6 @@ The flag `--cat` is able to print the data of the specified file if it has been 
 ```bash
 $./fsutils --cat <FAT16 file system> <file>
 ```
-
 ## Resources
 There are some resources that have been used to test the code ubicated in the `res` folder:
 - fat1.fs: FAT16 file system.

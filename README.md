@@ -28,12 +28,20 @@ The flag `--cat` is able to print the data of the specified file if it has been 
 ```bash
 $./fsutils --cat <FAT16 file system> <file>
 ```
-## Resources
+
+## Resources
 There are some resources that have been used to test the code ubicated in the `res` folder:
 - fat1.fs: FAT16 file system.
 - libfat: FAT16 file system.
+- mangaFat: FAT16 file system.
+- pokeFat: FAT16 file system.
+- datasetFat: FAT16 file system.
+- bigFileExt: ext2 file system.
+- datasetExt: ext2 file system.
+- mongoExt: ext2 file system.
 - lolext: ext2 file system.
 - yakofs: ext2 file system.
+
 
 ## Authors
 > Pol Piñol Castuera &nbsp;&middot;&nbsp;
